@@ -270,6 +270,7 @@ fn day4(input: &str) {
                 wins_count += 1;
             }
         }
+        assert!(wins_count < copies_count.len());
         scratchcards += copies_count[i % copies_count.len()];
         for next in 1..wins_count+1 {
             copies_count[(i + next) % copies_count.len()] += copies_count[i % copies_count.len()];
