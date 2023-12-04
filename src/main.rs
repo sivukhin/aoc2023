@@ -1,3 +1,6 @@
+#![feature(start)]
+
+use std::u128;
 const DAY1_EASY_PATTERN: &[&[&str]; 10] = &[
     &["0"],
     &["1"],
@@ -240,10 +243,52 @@ fn day3_hard(input: &[u8]) {
     eprintln!("day3: {sum}");
 }
 
-fn main() {
+fn day4(input: &str) {
+    let mut sum = 0;
+    let mut scratchcards = 0;
+    let mut copies_count = [1 as u128; 32];
+    for (i, line) in input.lines().enumerate() {
+        let (_, cards) = line.split_once(':').unwrap();
+        let (winning, hand) = cards.split_once('|').unwrap();
+        let mut winning_mask = 0 as u128;
+        for winning_card in winning.split(' ') {
+            let winning_card = winning_card.trim();
+            if winning_card.len() == 0 {
+                continue;
+            }
+            let number = winning_card.trim().parse::<u8>().unwrap();
+            winning_mask |= (1 as u128) << number;
+        }
+        let mut wins_count = 0;
+        for hand_card in hand.split(' ') {
+            let hand_card = hand_card.trim();
+            if hand_card.len() == 0 {
+                continue;
+            }
+            let number = hand_card.parse::<u8>().unwrap();
+            if winning_mask & ((1 as u128) << number) > 0 {
+                wins_count += 1;
+            }
+        }
+        scratchcards += copies_count[i % copies_count.len()];
+        for next in 1..wins_count+1 {
+            copies_count[(i + next) % copies_count.len()] += copies_count[i % copies_count.len()];
+        }
+        copies_count[i % copies_count.len()] = 1;
+
+        sum += if wins_count > 0 { 1 << (wins_count - 1) } else { 0 };
+    }
+    eprintln!("day4: {sum}");
+    eprintln!("day4: {scratchcards}");
+}
+
+#[start]
+fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
     day1(include_str!("inputs/input01.txt").trim(), DAY1_HARD_PATTERN); 
     day2(include_str!("inputs/input02.txt").trim(), Bag{ red: 12, green: 13, blue: 14 });
     day3_easy(include_bytes!("inputs/input03.txt"));
     day3_hard(include_bytes!("inputs/input03.txt"));
+    day4(include_str!("inputs/input04.txt").trim());
+    0
 }
