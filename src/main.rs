@@ -283,6 +283,55 @@ fn day4(input: &str) {
     eprintln!("day4: {scratchcards}");
 }
 
+fn split_exact<const N: usize>(input: &str, delimiter: char) -> Result<[&str; N], &str> {
+    let mut elements = [""; N];
+    let mut index = 0;
+    for element in input.split(delimiter) {
+        if index >= N {
+            return Err("too many elements for split");
+        }
+        elements[index] = element;
+        index += 1;
+    }
+    if index < N {
+        return Err("too few elements for split");
+    }
+    return Ok(elements);
+}
+
+fn day5(input: &str) {
+    let mut min_location = None::<i64>;
+    let seeds_line = input.lines().next().unwrap();
+    let (_, seeds) = seeds_line.split_once(':').unwrap();
+    for seed in seeds.trim().split(' ') {
+        let mut seed = seed.trim().parse::<i64>().unwrap();
+        let mut mapped = false;
+        for line in input.lines().skip(2) {
+            if line.contains(':') {
+                mapped = false; 
+                continue;
+            }
+            if line.len() == 0 {
+                continue;
+            }
+            let [dst_range_start, src_range_start, range_len] = split_exact::<3>(line.trim(), ' ').unwrap();
+            let (dst_range_start, src_range_start, range_len) = (
+                dst_range_start.parse::<i64>().unwrap(), 
+                src_range_start.parse::<i64>().unwrap(), 
+                range_len.parse::<i64>().unwrap()
+            );
+            if !mapped && src_range_start <= seed && seed < src_range_start + range_len {
+                seed = dst_range_start + (seed - src_range_start);
+                mapped = true;
+            }
+        }
+        min_location = Some(min_location.unwrap_or(seed).min(seed));
+    }
+
+    let min_location = min_location.unwrap();
+    eprintln!("day5: {min_location}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -291,5 +340,6 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day3_easy(include_bytes!("inputs/input03.txt"));
     day3_hard(include_bytes!("inputs/input03.txt"));
     day4(include_str!("inputs/input04.txt").trim());
+    day5(include_str!("inputs/input05.txt").trim());
     0
 }
