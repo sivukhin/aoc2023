@@ -332,6 +332,49 @@ fn day5(input: &str) {
     eprintln!("day5: {min_location}");
 }
 
+fn count_winning_options(time: i64, distance: i64) -> i64 {
+    assert!(time * time > 4 * distance);
+    let (time, distance) = (time as f64, distance as f64);
+    let min_duration = time / 2.0 - (time * time - 4.0 * distance).sqrt() / 2.0;
+    let max_duration = time / 2.0 + (time * time - 4.0 * distance).sqrt() / 2.0;
+    return (max_duration.ceil() - min_duration.floor() - 1.0) as i64;
+}
+
+fn day6(input: &str) {
+    let mut lines = input.lines();
+    let times = lines.next().unwrap().split_once(':').unwrap().1;
+    let distances = lines.next().unwrap().split_once(':').unwrap().1;
+    let mut time_iterator = times.trim().split(' ');
+    let mut distance_iterator = distances.trim().split(' ');
+    let mut mult = 1;
+    let (mut mega_time, mut mega_distance) = (0 as i64, 0 as i64);
+    loop {
+        let mut time = time_iterator.next();
+        while time.is_some() && time.unwrap().len() == 0 {
+            time = time_iterator.next();
+        }
+        let mut distance = distance_iterator.next();
+        while distance.is_some() && distance.unwrap().len() == 0 {
+            distance = distance_iterator.next();
+        }
+        if time.is_none() && distance.is_none() {
+            break;
+        }
+        for c in time.unwrap().as_bytes() {
+            mega_time = mega_time * 10 + c.digit().unwrap() as i64;
+        }
+        for c in distance.unwrap().as_bytes() {
+            mega_distance = mega_distance * 10 + c.digit().unwrap() as i64;
+        }
+        let time = time.unwrap().parse::<i64>().unwrap();
+        let distance = distance.unwrap().parse::<i64>().unwrap();
+        mult *= count_winning_options(time, distance);
+    }
+    eprintln!("day6: {mult}");
+    let mega_options = count_winning_options(mega_time, mega_distance);
+    eprintln!("day6: {mega_options}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -341,5 +384,6 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day3_hard(include_bytes!("inputs/input03.txt"));
     day4(include_str!("inputs/input04.txt").trim());
     day5(include_str!("inputs/input05.txt").trim());
+    day6(include_str!("inputs/input06.txt").trim());
     0
 }
