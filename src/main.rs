@@ -375,6 +375,149 @@ fn day6(input: &str) {
     eprintln!("day6: {mega_options}");
 }
 
+#[derive(PartialEq, PartialOrd, Debug)]
+enum CombinationType { Five, Four, FullHouse, Three, TwoPair, OnePair, High }
+struct Hand {
+    combination: CombinationType,
+    cards: [u8; 5]
+}
+
+const SIMPLE_CARDS: &[u8] = &[b'A', b'K', b'Q', b'J', b'T', b'9', b'8', b'7', b'6', b'5', b'4', b'3', b'2'];
+const JOKER_CARDS: &[u8] = &[b'A', b'K', b'Q', b'T', b'9', b'8', b'7', b'6', b'5', b'4', b'3', b'2', b'J'];
+trait GameRules { 
+    fn card_order(card: &u8) -> usize; 
+    fn parse_hand(hand: &str) -> Hand;
+}
+
+struct SimpleGame;
+impl GameRules for SimpleGame {
+    fn card_order(card: &u8) -> usize { 
+        for i in 0..SIMPLE_CARDS.len() {
+            if SIMPLE_CARDS[i] == *card {
+                return i;
+            }
+        }
+        panic!("unexpected card");
+    }
+    fn parse_hand(hand: &str) -> Hand {
+        let mut original_cards = [0 as u8; 5];
+        original_cards.copy_from_slice(hand.as_bytes());
+
+        let mut sorted_cards = original_cards;
+        sorted_cards.sort();
+        let mut runs = 0;
+        let mut lone_cards = 0;
+        for i in 0..sorted_cards.len() {
+            runs += if i == 0 || sorted_cards[i - 1] != sorted_cards[i] { 1 } else { 0 };
+            lone_cards += if i != 0 && sorted_cards[i - 1] == sorted_cards[i] || i + 1 < sorted_cards.len() && sorted_cards[i + 1] == sorted_cards[i] { 0 } else { 1 };
+        }
+
+        return if sorted_cards[0] == sorted_cards[4] {
+            Hand { combination: CombinationType::Five, cards: original_cards }
+        } else if sorted_cards[0] == sorted_cards[3] || sorted_cards[1] == sorted_cards[4] {
+            Hand { combination: CombinationType::Four, cards: original_cards }
+        } else if sorted_cards[0] == sorted_cards[2] && sorted_cards[3] == sorted_cards[4] || 
+                  sorted_cards[0] == sorted_cards[1] && sorted_cards[2] == sorted_cards[4] {
+            Hand { combination: CombinationType::FullHouse, cards: original_cards }
+        } else if runs == 3 && lone_cards == 2 {
+            Hand { combination: CombinationType::Three, cards: original_cards }
+        } else if runs == 3 {
+            Hand { combination: CombinationType::TwoPair, cards: original_cards }
+        } else if runs == 4 {
+            Hand { combination: CombinationType::OnePair, cards: original_cards }
+        } else {
+            Hand { combination: CombinationType::High, cards: original_cards }
+        }
+    }
+}
+
+struct JokerGame;
+impl GameRules for JokerGame {
+    fn card_order(card: &u8) -> usize { 
+        for i in 0..JOKER_CARDS.len() {
+            if JOKER_CARDS[i] == *card {
+                return i;
+            }
+        }
+        panic!("unexpected card");
+    }
+    fn parse_hand(hand: &str) -> Hand {
+        if !hand.contains('J') {
+            return SimpleGame::parse_hand(hand)
+        }
+
+        let mut original_cards = [0 as u8; 5];
+        original_cards.copy_from_slice(hand.as_bytes());
+
+        let mut sorted_cards = original_cards;
+        sorted_cards.sort();
+        let mut jokers_count = 0;
+        let mut runs = 0;
+        let mut lone_cards = 0;
+        for i in 0..sorted_cards.len() {
+            jokers_count += if sorted_cards[i] == b'J' { 1 } else { 0 };
+            runs += if i == 0 || sorted_cards[i - 1] != sorted_cards[i] { 1 } else { 0 };
+            lone_cards += if i != 0 && sorted_cards[i - 1] == sorted_cards[i] || i + 1 < sorted_cards.len() && sorted_cards[i + 1] == sorted_cards[i] { 0 } else { 1 };
+        }
+        assert!(jokers_count > 0);
+
+        return if runs <= 2 {
+            Hand { combination: CombinationType::Five, cards: original_cards }
+        } else if runs == 3 && !(jokers_count == 1 && lone_cards == 1) {
+            Hand { combination: CombinationType::Four, cards: original_cards }
+        } else if runs == 3 && jokers_count == 1 && lone_cards == 1 {
+            Hand { combination: CombinationType::FullHouse, cards: original_cards }
+        } else if runs == 4 {
+            Hand { combination: CombinationType::Three, cards: original_cards }
+        } else {
+            Hand { combination: CombinationType::OnePair, cards: original_cards }
+        }
+    }
+}
+
+fn beats<T: GameRules>(left: &Hand, right: &Hand) -> bool {
+    if left.combination != right.combination {
+        return left.combination < right.combination;
+    }
+    for i in 0..5 {
+        if left.cards[i] != right.cards[i] {
+            return T::card_order(&left.cards[i]) < T::card_order(&right.cards[i])
+        }
+    }
+    return false;
+}
+
+
+fn parse_bid<T: GameRules>(line: &str) -> (Hand, i32) {
+    let tokens = line.split_once(' ').unwrap();
+    let bid = tokens.1.parse::<i32>().unwrap();
+    return (T::parse_hand(tokens.0), bid);
+}
+
+fn day7(input: &str) {
+    let mut simple_sum = 0;
+    let mut joker_sum = 0;
+    for line in input.lines() {
+        let (current_simple_hand, bid) = parse_bid::<SimpleGame>(line);
+        let (current_joker_hand, _) = parse_bid::<JokerGame>(line);
+        let (mut simple_position, mut joker_position) = (1, 1);
+        for other in input.lines() {
+            let (other_simple_hand, _) = parse_bid::<SimpleGame>(other); 
+            let (other_joker_hand, _) = parse_bid::<JokerGame>(other); 
+            if beats::<SimpleGame>(&current_simple_hand, &other_simple_hand) {
+                simple_position += 1;
+            }
+            if beats::<JokerGame>(&current_joker_hand, &other_joker_hand) {
+                joker_position += 1;
+            }
+        }
+        simple_sum += simple_position * bid;
+        joker_sum += joker_position * bid;
+    }
+    eprintln!("day7: {simple_sum}");
+    eprintln!("day7: {joker_sum}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -385,5 +528,6 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day4(include_str!("inputs/input04.txt").trim());
     day5(include_str!("inputs/input05.txt").trim());
     day6(include_str!("inputs/input06.txt").trim());
+    day7(include_str!("inputs/input07.txt").trim());
     0
 }
