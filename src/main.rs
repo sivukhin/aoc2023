@@ -385,23 +385,23 @@ struct Hand {
 const SIMPLE_CARDS: &[u8] = &[b'A', b'K', b'Q', b'J', b'T', b'9', b'8', b'7', b'6', b'5', b'4', b'3', b'2'];
 const JOKER_CARDS: &[u8] = &[b'A', b'K', b'Q', b'T', b'9', b'8', b'7', b'6', b'5', b'4', b'3', b'2', b'J'];
 trait GameRules { 
-    fn card_order(card: &u8) -> usize; 
-    fn parse_hand(hand: &str) -> Hand;
+    fn card_order(card: u8) -> usize; 
+    fn parse_hand(hand: &[u8]) -> Hand;
 }
 
 struct SimpleGame;
 impl GameRules for SimpleGame {
-    fn card_order(card: &u8) -> usize { 
+    fn card_order(card: u8) -> usize { 
         for i in 0..SIMPLE_CARDS.len() {
-            if SIMPLE_CARDS[i] == *card {
+            if SIMPLE_CARDS[i] == card {
                 return i;
             }
         }
         panic!("unexpected card");
     }
-    fn parse_hand(hand: &str) -> Hand {
+    fn parse_hand(hand: &[u8]) -> Hand {
         let mut original_cards = [0 as u8; 5];
-        original_cards.copy_from_slice(hand.as_bytes());
+        original_cards.copy_from_slice(hand);
 
         let mut sorted_cards = original_cards;
         sorted_cards.sort();
@@ -433,21 +433,21 @@ impl GameRules for SimpleGame {
 
 struct JokerGame;
 impl GameRules for JokerGame {
-    fn card_order(card: &u8) -> usize { 
+    fn card_order(card: u8) -> usize { 
         for i in 0..JOKER_CARDS.len() {
-            if JOKER_CARDS[i] == *card {
+            if JOKER_CARDS[i] == card {
                 return i;
             }
         }
         panic!("unexpected card");
     }
-    fn parse_hand(hand: &str) -> Hand {
-        if !hand.contains('J') {
+    fn parse_hand(hand: &[u8]) -> Hand {
+        if !hand.contains(&b'J') {
             return SimpleGame::parse_hand(hand)
         }
 
         let mut original_cards = [0 as u8; 5];
-        original_cards.copy_from_slice(hand.as_bytes());
+        original_cards.copy_from_slice(hand);
 
         let mut sorted_cards = original_cards;
         sorted_cards.sort();
@@ -481,41 +481,45 @@ fn beats<T: GameRules>(left: &Hand, right: &Hand) -> bool {
     }
     for i in 0..5 {
         if left.cards[i] != right.cards[i] {
-            return T::card_order(&left.cards[i]) < T::card_order(&right.cards[i])
+            return T::card_order(left.cards[i]) < T::card_order(right.cards[i])
         }
     }
     return false;
 }
 
 
-fn parse_bid<T: GameRules>(line: &str) -> (Hand, i32) {
-    let tokens = line.split_once(' ').unwrap();
-    let bid = tokens.1.parse::<i32>().unwrap();
-    return (T::parse_hand(tokens.0), bid);
+fn parse_bid<T: GameRules>(line: &[u8]) -> (Hand, i32, &[u8]) {
+    let mut bid = 0;
+    let hand = T::parse_hand(&line[..5]);
+
+    let mut i = 6;
+    while i < line.len() && line[i] != b'\n' {
+        bid = 10 * bid + (line[i] - b'0') as i32;
+        i += 1;
+    }
+    return (hand, bid, &line[(i+1).min(line.len())..]);
 }
 
-fn day7(input: &str) {
-    let mut simple_sum = 0;
-    let mut joker_sum = 0;
-    for line in input.lines() {
-        let (current_simple_hand, bid) = parse_bid::<SimpleGame>(line);
-        let (current_joker_hand, _) = parse_bid::<JokerGame>(line);
-        let (mut simple_position, mut joker_position) = (1, 1);
-        for other in input.lines() {
-            let (other_simple_hand, _) = parse_bid::<SimpleGame>(other); 
-            let (other_joker_hand, _) = parse_bid::<JokerGame>(other); 
-            if beats::<SimpleGame>(&current_simple_hand, &other_simple_hand) {
-                simple_position += 1;
-            }
-            if beats::<JokerGame>(&current_joker_hand, &other_joker_hand) {
-                joker_position += 1;
+// intentionally quadratic because I'm still afraid of allocations, sorry
+fn day7<T: GameRules>(input: &[u8]) {
+    let mut sum = 0;
+    let mut first_line = input;
+    while first_line.len() > 1 {
+        let (current_hand, bid, remainder) = parse_bid::<T>(first_line);
+        first_line = remainder;
+
+        let mut position = 1;
+        let mut second_line = input;
+        while second_line.len() > 1 {
+            let (other_hand, _, remainder) = parse_bid::<T>(second_line);
+            second_line = remainder;
+            if beats::<T>(&current_hand, &other_hand) {
+                position += 1;
             }
         }
-        simple_sum += simple_position * bid;
-        joker_sum += joker_position * bid;
+        sum += position * bid;
     }
-    eprintln!("day7: {simple_sum}");
-    eprintln!("day7: {joker_sum}");
+    eprintln!("day7: {sum}");
 }
 
 #[start]
@@ -528,6 +532,7 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day4(include_str!("inputs/input04.txt").trim());
     day5(include_str!("inputs/input05.txt").trim());
     day6(include_str!("inputs/input06.txt").trim());
-    day7(include_str!("inputs/input07.txt").trim());
+    day7::<SimpleGame>(include_bytes!("inputs/input07.txt"));
+    day7::<JokerGame>(include_bytes!("inputs/input07.txt"));
     0
 }
