@@ -500,6 +500,14 @@ fn parse_bid<T: GameRules>(line: &[u8]) -> (Hand, i32, &[u8]) {
     return (hand, bid, &line[(i+1).min(line.len())..]);
 }
 
+fn parse_bid_str<T: GameRules>(line: &str) -> (Hand, i32) {
+    let (hand, bid) = line.split_once(' ').unwrap();
+    let hand = T::parse_hand(hand.as_bytes());
+
+    return (hand, bid.parse::<i32>().unwrap());
+}
+
+
 // intentionally quadratic because I'm still afraid of allocations, sorry
 fn day7<T: GameRules>(input: &[u8]) {
     let mut sum = 0;
@@ -522,6 +530,24 @@ fn day7<T: GameRules>(input: &[u8]) {
     eprintln!("day7: {sum}");
 }
 
+fn day7_str<T: GameRules>(input: &str) {
+    #![allow(unused)]
+    let mut sum = 0;
+    let mut first_line = input;
+    for first in input.lines() {
+        let (current_hand, bid) = parse_bid_str::<T>(first);
+        let mut position = 1;
+        for second in input.lines() {
+            let (other_hand, _) = parse_bid_str::<T>(second);
+            if beats::<T>(&current_hand, &other_hand) {
+                position += 1;
+            }
+        }
+        sum += position * bid;
+    }
+    eprintln!("day7: {sum}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -534,5 +560,6 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day6(include_str!("inputs/input06.txt").trim());
     day7::<SimpleGame>(include_bytes!("inputs/input07.txt"));
     day7::<JokerGame>(include_bytes!("inputs/input07.txt"));
+    // day7_str::<SimpleGame>(include_str!("inputs/input07.txt").trim());
     0
 }
