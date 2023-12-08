@@ -1,6 +1,5 @@
 #![feature(start)]
 
-use std::u128;
 const DAY1_EASY_PATTERN: &[&[&str]; 10] = &[
     &["0"],
     &["1"],
@@ -109,7 +108,7 @@ impl<'a> Grid<'a> {
                 height += 1;
             }
         }
-        Grid{ table: table, width: width, height: height - 1 }
+        Grid{ table, width, height: height - 1 }
     }
     pub fn at(&self, row: i32, col: i32) -> u8 {
         let pos = self.pos(row, col);
@@ -548,6 +547,94 @@ fn day7_str<T: GameRules>(input: &str) {
     eprintln!("day7: {sum}");
 }
 
+trait NodeExtensions {
+    fn code(&self) -> usize;
+}
+
+impl NodeExtensions for &str {
+    fn code(&self) -> usize {
+        let bytes = self.as_bytes();
+        return ((bytes[0] - b'A') as usize) * 26 * 26 + 
+               ((bytes[1] - b'A') as usize) * 26 + 
+               ((bytes[2] - b'A') as usize);
+    }
+}
+
+fn day8(input: &str) {
+    const TRIM_CHARS: &[char] = &[' ', '(', ')'];
+    let mut transitions = [(0, 0); 26 * 26 * 26];
+
+    let mut lines = input.lines();
+    let commands = lines.next().unwrap().as_bytes();
+    _ = lines.next().unwrap();
+
+    let mut ghosts = [0; 16];
+    let mut ghost_id = 0;
+
+    for line in lines.clone() {
+        let (source, targets) = line.split_once('=').unwrap();
+        let (source, targets) = (source.trim().code(), targets.trim_matches(TRIM_CHARS));
+        let (left, right) = targets.split_once(',').unwrap();
+        let (left, right) = (left.trim().code(), right.trim().code());
+        transitions[source] = (left, right);
+        if source % 26 == 0 {
+            assert!(ghost_id < ghosts.len(), "too many ghosts");
+            ghosts[ghost_id] = source;
+            ghost_id += 1;
+        }
+    }
+
+    let ghosts = &mut ghosts[..ghost_id];
+
+    let mut jumps = [0; 26 * 26 * 26];
+    for line in lines.clone() {
+        let (source, targets) = line.split_once('=').unwrap();
+        let (source, targets) = (source.trim().code(), targets.trim_matches(TRIM_CHARS));
+        let (left, right) = targets.split_once(',').unwrap();
+        let (left, right) = (left.trim().code(), right.trim().code());
+        for node in [source, left, right] {
+            let mut current = node;
+            for command in commands {
+                current = if *command == b'L' { transitions[current].0 } else { transitions[current].1 }; 
+            }
+            jumps[node] = current;
+        }
+    }
+
+    {
+        let mut steps = 0;
+        let mut node = 0;
+        while node != 26 * 26 * 26 - 1 {
+            let command = commands[steps % commands.len()];
+            node = if command == b'L' { transitions[node].0 } else { transitions[node].1 };
+            steps += 1;
+        }
+        eprintln!("day8: {steps}");
+    }
+    {
+        for _ in 0..input.len() {
+            for i in 0..ghosts.len() {
+                ghosts[i] = jumps[ghosts[i]];
+            }
+        }
+        let mut steps = commands.len() as i128;
+        for i in 0..ghosts.len() {
+            let mut cycle_len = 0;
+
+            let (start, mut current) = (ghosts[i], ghosts[i]);
+            loop {
+                cycle_len += 1;
+                current = jumps[current];
+                if current == start {
+                    break;
+                }
+            }
+            steps *= cycle_len;
+        }
+        eprintln!("day8: {steps}");
+    }
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -560,6 +647,7 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day6(include_str!("inputs/input06.txt").trim());
     day7::<SimpleGame>(include_bytes!("inputs/input07.txt"));
     day7::<JokerGame>(include_bytes!("inputs/input07.txt"));
-    // day7_str::<SimpleGame>(include_str!("inputs/input07.txt").trim());
+    day7_str::<SimpleGame>(include_str!("inputs/input07.txt").trim());
+    day8(include_str!("inputs/input08.txt").trim());
     0
 }
