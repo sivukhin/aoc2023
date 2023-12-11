@@ -93,6 +93,17 @@ fn day2(input: &str, bag: Bag) {
     eprintln!("day2: {power_sum}");
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct Point { x: i32, y: i32 }
+
+const DIRECTIONS_4: &[Point] = &[ Point{x: 1, y: 0}, Point{x: 0, y: 1}, Point{x: -1, y: 0}, Point{x: 0, y: -1} ];
+const DIRECTIONS_6: &[Point] = &[ Point{x: 1, y: -1}, Point{x: 1, y: 0}, Point{x: 1, y: 1}, Point{x: -1, y: -1}, Point{x: -1, y: 0}, Point{x: -1, y: 1} ];
+
+impl Point {
+    fn add(&self, other: Point) -> Point { Point { x: self.x + other.x, y: self.y + other.y } }
+    fn sub(&self, other: Point) -> Point { Point { x: self.x - other.x, y: self.y - other.y } }
+}
+
 struct Grid<'a> {
     table: &'a [u8],
     width: i32,
@@ -110,15 +121,21 @@ impl<'a> Grid<'a> {
         }
         Grid{ table, width, height: height - 1 }
     }
-    pub fn at(&self, row: i32, col: i32) -> u8 {
-        let pos = self.pos(row, col);
+    pub fn at(&self, position: Point) -> u8 {
+        let pos = self.pos(position);
         if pos.is_none() { return '.' as u8; }
         let symbol = self.table[pos.unwrap()] as u8;
         return if symbol == '\n' as u8 { '.' as u8 } else { symbol };
     }
-    pub fn pos(&self, row: i32, col: i32) -> Option<usize> {
+    pub fn pos(&self, Point {x: row, y: col}: Point) -> Option<usize> {
         if row < 0 || col < 0 || row >= self.height || col >= self.width { return None::<usize>; }
         return Some((row * self.width + col) as usize);
+    }
+    pub fn index(&self, index: i32) -> Option<Point> {
+        if index < 0 || index >= self.table.len() as i32 {
+            return None;
+        }
+        return Some(Point { x: index / self.width, y: index % self.width });
     }
 }
 
@@ -161,23 +178,24 @@ fn day3_easy(input: &[u8]) {
     for row in 0..grid.height {
         let mut col = 0;
         while col < grid.width {
-            if grid.at(row, col).digit().is_none() {
+            if grid.at(Point { x: row, y: col }).digit().is_none() {
                 col += 1;
                 continue;
             }
-            let (mut number, mut is_part_number) = (0, !grid.at(row, col - 1).dot());
+            let (mut number, mut is_part_number) = (0, !grid.at(Point { x: row, y: col - 1 }).dot());
             while col < grid.width {
-                let symbol = grid.at(row, col).digit();
+                let symbol = grid.at(Point { x: row, y: col }).digit();
                 if symbol.is_none() {
                     break;
                 }
                 number = 10 * number + symbol.unwrap();
-                for (drow, dcol) in [(-1, -1), (-1, 0), (-1, 1), (1, -1), (1, 0), (1, 1)] {
-                    is_part_number |= !grid.at(row + drow, col + dcol).dot();
+                let position = Point { x: row, y: col };
+                for &direction in DIRECTIONS_6 {
+                    is_part_number |= !grid.at(position.add(direction)).dot();
                 }
                 col += 1;
             }
-            is_part_number = is_part_number || !grid.at(row, col).dot();
+            is_part_number = is_part_number || !grid.at(Point { x: row, y: col }).dot();
             if !is_part_number {
                 continue;
             }
@@ -211,28 +229,28 @@ fn day3_hard(input: &[u8]) {
     let mut sum = 0;
     for row in 0..grid.height {
         for col in 0..grid.width {
-            if grid.at(row, col) != '*' as u8 {
+            if grid.at(Point { x: row, y: col }) != '*' as u8 {
                 continue;
             }
             let mut gear = Gear{drivers_count: 0, drivers: [0; 2]};
-            if let Some(pos) = grid.pos(row, col - 1) {
+            if let Some(pos) = grid.pos(Point { x: row, y: col - 1 }) {
                 gear.add_driver(input.number_span(pos));
             }
-            if let Some(pos) = grid.pos(row, col + 1) {
+            if let Some(pos) = grid.pos(Point { x: row, y: col + 1 }) {
                 gear.add_driver(input.number_span(pos));
             }
             for drow in [-1, 1] {
-                if let Some(pos) = grid.pos(row + drow, col) {
+                if let Some(pos) = grid.pos(Point { x: row + drow, y: col }) {
                     let driver = input.number_span(pos);
                     gear.add_driver(driver);
                     if driver.is_some() {
                         continue;
                     }
                 }
-                if let Some(pos) = grid.pos(row + drow, col - 1) {
+                if let Some(pos) = grid.pos(Point { x: row + drow, y: col - 1 }) {
                     gear.add_driver(input.number_span(pos));
                 }
-                if let Some(pos) = grid.pos(row + drow, col + 1) {
+                if let Some(pos) = grid.pos(Point { x: row + drow, y: col + 1 }) {
                     gear.add_driver(input.number_span(pos));
                 }
             }
@@ -636,6 +654,7 @@ fn day8(input: &str) {
 }
 
 fn day8_hard_brute_force(input: &str) {
+    #![allow(unused)]
     const TRIM_CHARS: &[char] = &[' ', '(', ')'];
     const MASK_SIZE: usize = 8;
     let mut transitions = [(0, 0); 26 * 26 * 26];
@@ -751,6 +770,118 @@ fn day9(input: &str) {
     eprintln!("day9: {backward_prediction}");
 }
 
+trait GridPipes {
+    fn can_go(&self, position: Point, direction: Point) -> bool;
+}
+
+type Pipe = i32;
+const NONE: Pipe = 0b0000;
+const ALL: Pipe = 0b1111;
+const L: Pipe = 0b0001;
+const T: Pipe = 0b0010;
+const R: Pipe = 0b0100;
+const B: Pipe = 0b1000;
+const LR: Pipe = 0b0101;
+const TB: Pipe = 0b1010;
+const LT: Pipe = 0b0011;
+const LB: Pipe = 0b1001;
+const RT: Pipe = 0b0110;
+const RB: Pipe = 0b1100;
+
+
+fn pipe_from(symbol: u8) -> Pipe {
+    return match symbol {
+        b'S' => ALL,
+        b'|' => TB,
+        b'-' => LR,
+        b'L' => RT,
+        b'F' => RB,
+        b'J' => LT,
+        b'7' => LB,
+        _ => NONE,
+    }
+}
+
+impl<'a> GridPipes for Grid<'a> {
+    fn can_go(&self, position: Point, direction: Point) -> bool {
+        let (from, to) = (pipe_from(self.at(position)), pipe_from(self.at(position.add(direction))));
+        return match direction {
+            Point { x: -1, y: 0 } => from & T > 0 && to & B > 0,
+            Point { x: 1, y: 0 } => from & B > 0 && to & T > 0,
+            Point { x: 0, y: -1 } => from & L > 0 && to & R > 0,
+            Point { x: 0, y: 1 } => from & R > 0 && to & L > 0,
+            _ => panic!("unexpected symbol"),
+        };
+    }
+}
+
+#[derive(Copy, Clone)]
+struct GridCursor {
+    previous: Point,
+    current: Point,
+}
+
+trait GridWalk {
+    fn walk(&self, cursor: GridCursor) -> Option<GridCursor>;
+}
+
+impl<'a> GridWalk for Grid<'a> {
+    fn walk(&self, cursor: GridCursor) -> Option<GridCursor> {
+        for &direction in DIRECTIONS_4 {
+            if self.can_go(cursor.current, direction) && cursor.current.add(direction) != cursor.previous {
+                return Some(GridCursor { current: cursor.current.add(direction), previous: cursor.current });
+            }
+        }
+        return None;
+    }
+}
+
+fn day10(input: &[u8]) {
+    let grid = Grid::new(input);
+    let mut start = grid.index(input.iter().position(|&x| x == b'S').unwrap() as i32).unwrap();
+    let mut cursor = GridCursor { current: start, previous: start };
+    let mut step = 0;
+    let mut corner = cursor;
+    loop { 
+        cursor = grid.walk(cursor).unwrap();
+        if cursor.current < corner.current {
+            corner = cursor;
+        }
+        step += 1;
+        if cursor.current == start {
+            break;
+        }
+    }
+
+    let mut signed_area = 0;
+    let mut delta = 0;
+    let mut corner_type = 1;
+    (cursor, start) = (corner, corner.current);
+    loop {
+        let next = grid.walk(cursor).unwrap();
+        let sign_in = cursor.current.y - cursor.previous.y;
+        let sign_out = next.current.y - next.previous.y;
+        signed_area += cursor.current.x * sign_out;
+        if cursor.current.sub(cursor.previous) == next.current.sub(next.previous) {
+            delta += 2;
+        } else {
+            if cursor.current != corner.current && next.current.sub(next.previous) == corner.current.sub(corner.previous) {
+                corner_type = 4 - corner_type;
+            } 
+            delta += corner_type;
+            corner = cursor;
+        }
+
+        cursor = next;
+        if cursor.current == start {
+            break;
+        }
+    }
+    let area = signed_area.abs() - delta / 4;
+    eprintln!("day10: {}", step / 2);
+    eprintln!("day10: {area}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -767,5 +898,6 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day8(include_str!("inputs/input08.txt").trim());
     // day8_hard_brute_force(include_str!("inputs/input08.txt").trim());
     day9(include_str!("inputs/input09.txt").trim());
+    day10(include_bytes!("inputs/input10.txt"));
     0
 }
