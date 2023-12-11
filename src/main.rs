@@ -635,6 +635,122 @@ fn day8(input: &str) {
     }
 }
 
+fn day8_hard_brute_force(input: &str) {
+    const TRIM_CHARS: &[char] = &[' ', '(', ')'];
+    const MASK_SIZE: usize = 8;
+    let mut transitions = [(0, 0); 26 * 26 * 26];
+
+    let mut lines = input.lines();
+    let commands = lines.next().unwrap().as_bytes();
+    _ = lines.next().unwrap();
+
+    let mut ghosts = [0; 16];
+    let mut ghost_id = 0;
+
+    for line in lines.clone() {
+        let (source, targets) = line.split_once('=').unwrap();
+        let (source, targets) = (source.trim().code(), targets.trim_matches(TRIM_CHARS));
+        let (left, right) = targets.split_once(',').unwrap();
+        let (left, right) = (left.trim().code(), right.trim().code());
+        transitions[source] = (left, right);
+        if source % 26 == 0 {
+            assert!(ghost_id < ghosts.len(), "too many ghosts");
+            ghosts[ghost_id] = source;
+            ghost_id += 1;
+        }
+    }
+
+    let ghosts = &mut ghosts[..ghost_id];
+
+    let mut jumps = [0; 26 * 26 * 26];
+    let mut masks = [[0 as u64; MASK_SIZE]; 26 * 26 * 26]; 
+    for line in lines.clone() {
+        let (source, targets) = line.split_once('=').unwrap();
+        let (source, targets) = (source.trim().code(), targets.trim_matches(TRIM_CHARS));
+        let (left, right) = targets.split_once(',').unwrap();
+        let (left, right) = (left.trim().code(), right.trim().code());
+        for node in [source, left, right] {
+            let mut current = node;
+            for (i, command) in commands.iter().enumerate() {
+                if current % 26 == 25 {
+                    masks[node][i / 64] |= 1 << (i % 64);
+                }
+                current = if *command == b'L' { transitions[current].0 } else { transitions[current].1 }; 
+            }
+            jumps[node] = current;
+        }
+    }
+
+    {
+        let mut steps_logged = 0;
+        let mut steps = 0;
+        'fast_loop: loop {
+            if steps - steps_logged > 1_000_000_000 {
+                steps_logged = steps;
+                dbg!(steps);
+            }
+            'mask_loop: for i in 0..MASK_SIZE {
+                let mut intersection = masks[ghosts[0]][i];
+                for s in 1..ghosts.len() {
+                    intersection &= masks[ghosts[s]][i];
+                    if intersection == 0 {
+                        continue 'mask_loop;
+                    }
+                }
+                break 'fast_loop;
+            }
+            for i in 0..ghosts.len() {
+                ghosts[i] = jumps[ghosts[i]];
+            }
+            steps += commands.len();
+        }
+        loop {
+            let mut finished = true;
+            for i in 0..ghosts.len() {
+                finished &= ghosts[i] % 26 == 25;
+            }
+            if finished {
+                break;
+            }
+            let command = commands[steps % commands.len()];
+            steps += 1;
+            for i in 0..ghosts.len() {
+                ghosts[i] = if command == b'L' { transitions[ghosts[i]].0 } else { transitions[ghosts[i]].1 };
+            }
+        }
+        eprintln!("day8 (bruteforce): {steps}");
+    }
+}
+
+fn get_c(n: usize, k: usize) -> i128 {
+    let mut result: i128 = 1;
+    for i in n-k+1..n+1 {
+        result *= i as i128;
+    }
+    for i in 1..k+1 {
+        result /= i as i128;
+    }
+    return result;
+}
+
+fn day9(input: &str) {
+    let mut forward_prediction = 0;
+    let mut backward_prediction = 0;
+    for line in input.lines() {
+        let count = line.split(' ').count();
+        for (i, number) in line.split(' ').rev().enumerate() {
+            let number = number.parse::<i128>().unwrap();
+            forward_prediction += get_c(count, i + 1) * number * (if i % 2 == 0 { 1 } else { -1 }); 
+        }
+        for (i, number) in line.split(' ').enumerate() {
+            let number = number.parse::<i128>().unwrap();
+            backward_prediction += get_c(count, i + 1) * number * (if i % 2 == 0 { 1 } else { -1 }); 
+        }
+    }
+    eprintln!("day9: {forward_prediction}");
+    eprintln!("day9: {backward_prediction}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -649,5 +765,7 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day7::<JokerGame>(include_bytes!("inputs/input07.txt"));
     day7_str::<SimpleGame>(include_str!("inputs/input07.txt").trim());
     day8(include_str!("inputs/input08.txt").trim());
+    // day8_hard_brute_force(include_str!("inputs/input08.txt").trim());
+    day9(include_str!("inputs/input09.txt").trim());
     0
 }
