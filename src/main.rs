@@ -882,6 +882,40 @@ fn day10(input: &[u8]) {
     eprintln!("day10: {area}");
 }
 
+fn day11(input: &[u8]) {
+    let grid = Grid::new(input);
+    let galaxies = input.iter().filter(|&&b| b == b'#').count();
+    let (mut distance_sum_small, mut distance_sum_large) = (0, 0);
+    let (mut top_count, mut bottom_count) = (0, galaxies);
+    for row in 0..grid.height {
+        let mut row_count = 0;
+        for col in 0..grid.width {
+            if grid.at(Point { x: row, y: col }) == b'#' {
+                row_count += 1;
+            }
+        }
+        top_count += row_count;
+        bottom_count -= row_count;
+        distance_sum_small += top_count * bottom_count * if row_count == 0 { 2 } else { 1 };
+        distance_sum_large += top_count * bottom_count * if row_count == 0 { 1000000 } else { 1 };
+    }
+    let (mut left_count, mut right_count) = (0, galaxies);
+    for col in 0..grid.width {
+        let mut col_count = 0;
+        for row in 0..grid.height {
+            if grid.at(Point { x: row, y: col }) == b'#' {
+                col_count += 1;
+            }
+        }
+        left_count += col_count;
+        right_count -= col_count;
+        distance_sum_small += left_count * right_count * if col_count == 0 { 2 } else { 1 };
+        distance_sum_large += left_count * right_count * if col_count == 0 { 1000000 } else { 1 };
+    }
+    eprintln!("day11: {distance_sum_small}");
+    eprintln!("day11: {distance_sum_large}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -899,5 +933,6 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     // day8_hard_brute_force(include_str!("inputs/input08.txt").trim());
     day9(include_str!("inputs/input09.txt").trim());
     day10(include_bytes!("inputs/input10.txt"));
+    day11(include_bytes!("inputs/input11.txt"));
     0
 }
