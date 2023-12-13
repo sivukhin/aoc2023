@@ -1,5 +1,7 @@
 #![feature(start)]
 
+use rand::Rng;
+
 const DAY1_EASY_PATTERN: &[&[&str]; 10] = &[
     &["0"],
     &["1"],
@@ -47,7 +49,7 @@ fn day1(input: &str, patterns: &[&[&str]; 10]) {
         let value = first_digit.unwrap() * 10 + last_digit.unwrap();
         sum += value;
     }
-    eprintln!("day1: {sum}");
+    eprintln!("day01: {sum}");
 }
 
 struct Bag {
@@ -89,8 +91,8 @@ fn day2(input: &str, bag: Bag) {
             count_valid += game_id.parse::<i32>().unwrap();
         }
     }
-    eprintln!("day2: {count_valid}");
-    eprintln!("day2: {power_sum}");
+    eprintln!("day02: {count_valid}");
+    eprintln!("day02: {power_sum}");
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -202,7 +204,7 @@ fn day3_easy(input: &[u8]) {
             sum += number;
         }
     }
-    eprintln!("day3: {sum}");
+    eprintln!("day03: {sum}");
 }
 
 struct Gear {
@@ -257,7 +259,7 @@ fn day3_hard(input: &[u8]) {
             sum += gear.power().unwrap_or(0);
         }
     }
-    eprintln!("day3: {sum}");
+    eprintln!("day03: {sum}");
 }
 
 fn day4(input: &str) {
@@ -296,8 +298,8 @@ fn day4(input: &str) {
 
         sum += if wins_count > 0 { 1 << (wins_count - 1) } else { 0 };
     }
-    eprintln!("day4: {sum}");
-    eprintln!("day4: {scratchcards}");
+    eprintln!("day04: {sum}");
+    eprintln!("day04: {scratchcards}");
 }
 
 fn split_exact<const N: usize>(input: &str, delimiter: char) -> Result<[&str; N], &str> {
@@ -346,7 +348,7 @@ fn day5(input: &str) {
     }
 
     let min_location = min_location.unwrap();
-    eprintln!("day5: {min_location}");
+    eprintln!("day05: {min_location}");
 }
 
 fn count_winning_options(time: i64, distance: i64) -> i64 {
@@ -387,9 +389,9 @@ fn day6(input: &str) {
         let distance = distance.unwrap().parse::<i64>().unwrap();
         mult *= count_winning_options(time, distance);
     }
-    eprintln!("day6: {mult}");
+    eprintln!("day06: {mult}");
     let mega_options = count_winning_options(mega_time, mega_distance);
-    eprintln!("day6: {mega_options}");
+    eprintln!("day06: {mega_options}");
 }
 
 #[derive(PartialEq, PartialOrd, Debug)]
@@ -544,7 +546,7 @@ fn day7<T: GameRules>(input: &[u8]) {
         }
         sum += position * bid;
     }
-    eprintln!("day7: {sum}");
+    eprintln!("day07: {sum}");
 }
 
 fn day7_str<T: GameRules>(input: &str) {
@@ -562,7 +564,7 @@ fn day7_str<T: GameRules>(input: &str) {
         }
         sum += position * bid;
     }
-    eprintln!("day7: {sum}");
+    eprintln!("day07: {sum}");
 }
 
 trait NodeExtensions {
@@ -627,7 +629,7 @@ fn day8(input: &str) {
             node = if command == b'L' { transitions[node].0 } else { transitions[node].1 };
             steps += 1;
         }
-        eprintln!("day8: {steps}");
+        eprintln!("day08: {steps}");
     }
     {
         for _ in 0..input.len() {
@@ -649,7 +651,7 @@ fn day8(input: &str) {
             }
             steps *= cycle_len;
         }
-        eprintln!("day8: {steps}");
+        eprintln!("day08: {steps}");
     }
 }
 
@@ -766,8 +768,8 @@ fn day9(input: &str) {
             backward_prediction += get_c(count, i + 1) * number * (if i % 2 == 0 { 1 } else { -1 }); 
         }
     }
-    eprintln!("day9: {forward_prediction}");
-    eprintln!("day9: {backward_prediction}");
+    eprintln!("day09: {forward_prediction}");
+    eprintln!("day09: {backward_prediction}");
 }
 
 trait GridPipes {
@@ -916,6 +918,104 @@ fn day11(input: &[u8]) {
     eprintln!("day11: {distance_sum_large}");
 }
 
+struct RIter {
+    sum: i32,
+    count: i32,
+    previous_index: i32,
+    current_index: i32,
+    current_count: i32,
+}
+
+impl RIter {
+    fn new(sum: i32, count: i32) -> RIter {
+        RIter { sum, count, previous_index: 0, current_index: 1, current_count: 0 }
+    }
+    fn valid(&mut self) -> bool {
+        return self.current_count == self.count && self.next().is_none();
+    }
+    fn next(&mut self) -> Option<i32> {
+        let mut rng = rand::thread_rng();
+        while self.current_index <= self.sum + self.count {
+            let chance = rng.gen_range(0..self.sum + self.count);
+            if chance >= self.count {
+                self.current_index += 1;
+                continue;
+            }
+            let result = self.current_index - self.previous_index - 1;
+            self.previous_index = self.current_index;
+            self.current_index += 1;
+            self.current_count += 1;
+            return Some(result);
+        }
+        return None;
+    }
+}
+
+fn validate_blocks(records: &[u8], blocks: &str, distances: &mut RIter) -> bool {
+    let mut ds: Vec<usize> = Vec::new();
+
+    let mut valid = true;
+    let mut current = 0;
+    let mut lengths_iter = blocks.split(',').map(|x| x.parse::<i32>().unwrap());
+    for i in 0..distances.count {
+        let distance = distances.next();
+        if distance.is_none() {
+            return false;
+        }
+        let distance = distance.unwrap() as usize;
+        ds.push(distance);
+
+        valid &= !records[current..current+distance].iter().any(|&x| x == b'#');
+        current += distance;
+
+        let length = lengths_iter.next().unwrap() as usize;
+        valid &= !records[current..current + length as usize].iter().any(|&x| x == b'.');
+        current += length;
+
+        if i < distances.count - 1 {
+            valid &= records[current] != b'#';
+            current += 1;
+        }
+    }
+    if records[current..].iter().any(|&x| x == b'#') {
+        valid = false;
+    }
+    return valid;
+}
+
+fn day12(input: &str, precision: f64) {
+    let mut sum = 0;
+    for line in input.lines() {
+        let (records, blocks) = line.split_once(' ').unwrap();
+        let blocks_count = blocks.split(',').count() as i32;
+        let blocks_sum: i32 = blocks.split(',').map(|x| x.parse::<i32>().unwrap()).sum();
+        let distances = records.len() as i32 - (blocks_count - 1) - blocks_sum; 
+        let (mut valid_samples, mut total_samples) = (0, 0);
+        let total_count = get_c((distances + blocks_count) as usize, blocks_count as usize);
+        loop {
+            let mut riter = RIter::new(distances, blocks_count); 
+            let valid = validate_blocks(records.as_bytes(), blocks, &mut riter);
+            if !riter.valid() {
+                continue;
+            }
+            total_samples += 1;
+            if valid {
+                valid_samples += 1;
+            }
+            if total_samples % 1024 == 0 {
+                let p = valid_samples as f64 / total_samples as f64;
+                let stddev = (1.0 / total_samples as f64 * p * (1.0 - p)).sqrt();
+                if total_samples > total_count && (stddev * total_count as f64) < precision {
+                    break;
+                }
+            }
+        }
+        let valid_count = (valid_samples * total_count + total_samples / 2) / total_samples;
+        sum += valid_count;
+    }
+    eprintln!("day12: ~{sum}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -929,10 +1029,10 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day7::<SimpleGame>(include_bytes!("inputs/input07.txt"));
     day7::<JokerGame>(include_bytes!("inputs/input07.txt"));
     day7_str::<SimpleGame>(include_str!("inputs/input07.txt").trim());
-    day8(include_str!("inputs/input08.txt").trim());
-    // day8_hard_brute_force(include_str!("inputs/input08.txt").trim());
+    day8(include_str!("inputs/input08.txt").trim()); // day8_hard_brute_force(include_str!("inputs/input08.txt").trim());
     day9(include_str!("inputs/input09.txt").trim());
     day10(include_bytes!("inputs/input10.txt"));
     day11(include_bytes!("inputs/input11.txt"));
+    day12(include_str!("inputs/input12.txt").trim(), 0.5);
     0
 }
