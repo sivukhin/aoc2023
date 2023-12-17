@@ -1,6 +1,11 @@
 #![feature(start)]
 
-use rand::Rng;
+use std::collections::{BTreeSet, HashMap};
+
+use rand::{
+    rngs::{SmallRng, ThreadRng},
+    Rng, SeedableRng,
+};
 
 const DAY1_EASY_PATTERN: &[&[&str]; 10] = &[
     &["0"],
@@ -65,17 +70,25 @@ fn day2(input: &str, bag: Bag) {
         let game = line.strip_prefix("Game ").unwrap();
         let (game_id, rounds) = game.split_once(':').unwrap();
         let mut valid = true;
-        let mut bag_prediction = Bag{ red: 0, green: 0, blue: 0 };
+        let mut bag_prediction = Bag {
+            red: 0,
+            green: 0,
+            blue: 0,
+        };
 
         for round in rounds.split(';') {
-            let mut round_bag = Bag{red: 0, green: 0, blue: 0};
+            let mut round_bag = Bag {
+                red: 0,
+                green: 0,
+                blue: 0,
+            };
             for cube in round.trim().split(',') {
                 let (count, color) = cube.trim().split_once(' ').unwrap();
                 let field = match color.trim() {
                     "red" => &mut round_bag.red,
                     "green" => &mut round_bag.green,
                     "blue" => &mut round_bag.blue,
-                    _ => panic!("unexpected color: {color}")
+                    _ => panic!("unexpected color: {color}"),
                 };
                 *field += count.parse::<i32>().unwrap();
             }
@@ -95,15 +108,46 @@ fn day2(input: &str, bag: Bag) {
     eprintln!("day02: {power_sum}");
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct Point { x: i32, y: i32 }
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+struct Point {
+    x: i32,
+    y: i32,
+}
 
-const DIRECTIONS_4: &[Point] = &[ Point{x: 1, y: 0}, Point{x: 0, y: 1}, Point{x: -1, y: 0}, Point{x: 0, y: -1} ];
-const DIRECTIONS_6: &[Point] = &[ Point{x: 1, y: -1}, Point{x: 1, y: 0}, Point{x: 1, y: 1}, Point{x: -1, y: -1}, Point{x: -1, y: 0}, Point{x: -1, y: 1} ];
+const DIRECTIONS_4: &[Point] = &[
+    Point { x: 1, y: 0 },
+    Point { x: 0, y: 1 },
+    Point { x: -1, y: 0 },
+    Point { x: 0, y: -1 },
+];
+const DIRECTIONS_6: &[Point] = &[
+    Point { x: 1, y: -1 },
+    Point { x: 1, y: 0 },
+    Point { x: 1, y: 1 },
+    Point { x: -1, y: -1 },
+    Point { x: -1, y: 0 },
+    Point { x: -1, y: 1 },
+];
 
 impl Point {
-    fn add(&self, other: Point) -> Point { Point { x: self.x + other.x, y: self.y + other.y } }
-    fn sub(&self, other: Point) -> Point { Point { x: self.x - other.x, y: self.y - other.y } }
+    fn mult(&self, k: i32) -> Point {
+        Point {
+            x: self.x * k,
+            y: self.y * k,
+        }
+    }
+    fn add(&self, other: Point) -> Point {
+        Point {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+    fn sub(&self, other: Point) -> Point {
+        Point {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
 }
 
 struct Grid<'a> {
@@ -121,23 +165,38 @@ impl<'a> Grid<'a> {
                 height += 1;
             }
         }
-        Grid{ table, width, height: height - 1 }
+        Grid {
+            table,
+            width,
+            height: height - 1,
+        }
     }
     pub fn at(&self, position: Point) -> u8 {
         let pos = self.pos(position);
-        if pos.is_none() { return '.' as u8; }
+        if pos.is_none() {
+            return '.' as u8;
+        }
         let symbol = self.table[pos.unwrap()] as u8;
-        return if symbol == '\n' as u8 { '.' as u8 } else { symbol };
+        return if symbol == '\n' as u8 {
+            '.' as u8
+        } else {
+            symbol
+        };
     }
-    pub fn pos(&self, Point {x: row, y: col}: Point) -> Option<usize> {
-        if row < 0 || col < 0 || row >= self.height || col >= self.width { return None::<usize>; }
+    pub fn pos(&self, Point { x: row, y: col }: Point) -> Option<usize> {
+        if row < 0 || col < 0 || row >= self.height || col >= self.width {
+            return None::<usize>;
+        }
         return Some((row * self.width + col) as usize);
     }
     pub fn index(&self, index: i32) -> Option<Point> {
         if index < 0 || index >= self.table.len() as i32 {
             return None;
         }
-        return Some(Point { x: index / self.width, y: index % self.width });
+        return Some(Point {
+            x: index / self.width,
+            y: index % self.width,
+        });
     }
 }
 
@@ -146,8 +205,16 @@ trait ByteExtensions {
     fn dot(&self) -> bool;
 }
 impl ByteExtensions for u8 {
-    fn digit(&self) -> Option<i32> { if '0' as u8 <= *self && *self <= '9' as u8 { Some((*self - '0' as u8) as i32) } else { None::<i32> } }
-    fn dot(&self) -> bool { *self == '.' as u8 }
+    fn digit(&self) -> Option<i32> {
+        if '0' as u8 <= *self && *self <= '9' as u8 {
+            Some((*self - '0' as u8) as i32)
+        } else {
+            None::<i32>
+        }
+    }
+    fn dot(&self) -> bool {
+        *self == '.' as u8
+    }
 }
 trait ByteSeqExtensions {
     fn number_span(&self, mid: usize) -> Option<i32>;
@@ -165,7 +232,9 @@ impl ByteSeqExtensions for &[u8] {
         let mut number = 0;
         while current < self.len() {
             match self[current].digit() {
-                Some(digit) => { number = 10 * number + digit; },
+                Some(digit) => {
+                    number = 10 * number + digit;
+                }
                 None => return Some(number),
             }
             current += 1;
@@ -184,7 +253,8 @@ fn day3_easy(input: &[u8]) {
                 col += 1;
                 continue;
             }
-            let (mut number, mut is_part_number) = (0, !grid.at(Point { x: row, y: col - 1 }).dot());
+            let (mut number, mut is_part_number) =
+                (0, !grid.at(Point { x: row, y: col - 1 }).dot());
             while col < grid.width {
                 let symbol = grid.at(Point { x: row, y: col }).digit();
                 if symbol.is_none() {
@@ -221,8 +291,11 @@ impl Gear {
         self.drivers_count += 1;
     }
     pub fn power(&self) -> Option<i32> {
-        if self.drivers_count == 2 { Some(self.drivers[0] * self.drivers[1]) }
-        else { None::<i32> }
+        if self.drivers_count == 2 {
+            Some(self.drivers[0] * self.drivers[1])
+        } else {
+            None::<i32>
+        }
     }
 }
 
@@ -234,7 +307,10 @@ fn day3_hard(input: &[u8]) {
             if grid.at(Point { x: row, y: col }) != '*' as u8 {
                 continue;
             }
-            let mut gear = Gear{drivers_count: 0, drivers: [0; 2]};
+            let mut gear = Gear {
+                drivers_count: 0,
+                drivers: [0; 2],
+            };
             if let Some(pos) = grid.pos(Point { x: row, y: col - 1 }) {
                 gear.add_driver(input.number_span(pos));
             }
@@ -242,17 +318,26 @@ fn day3_hard(input: &[u8]) {
                 gear.add_driver(input.number_span(pos));
             }
             for drow in [-1, 1] {
-                if let Some(pos) = grid.pos(Point { x: row + drow, y: col }) {
+                if let Some(pos) = grid.pos(Point {
+                    x: row + drow,
+                    y: col,
+                }) {
                     let driver = input.number_span(pos);
                     gear.add_driver(driver);
                     if driver.is_some() {
                         continue;
                     }
                 }
-                if let Some(pos) = grid.pos(Point { x: row + drow, y: col - 1 }) {
+                if let Some(pos) = grid.pos(Point {
+                    x: row + drow,
+                    y: col - 1,
+                }) {
                     gear.add_driver(input.number_span(pos));
                 }
-                if let Some(pos) = grid.pos(Point { x: row + drow, y: col + 1 }) {
+                if let Some(pos) = grid.pos(Point {
+                    x: row + drow,
+                    y: col + 1,
+                }) {
                     gear.add_driver(input.number_span(pos));
                 }
             }
@@ -291,12 +376,16 @@ fn day4(input: &str) {
         }
         assert!(wins_count < copies_count.len());
         scratchcards += copies_count[i % copies_count.len()];
-        for next in 1..wins_count+1 {
+        for next in 1..wins_count + 1 {
             copies_count[(i + next) % copies_count.len()] += copies_count[i % copies_count.len()];
         }
         copies_count[i % copies_count.len()] = 1;
 
-        sum += if wins_count > 0 { 1 << (wins_count - 1) } else { 0 };
+        sum += if wins_count > 0 {
+            1 << (wins_count - 1)
+        } else {
+            0
+        };
     }
     eprintln!("day04: {sum}");
     eprintln!("day04: {scratchcards}");
@@ -327,17 +416,18 @@ fn day5(input: &str) {
         let mut mapped = false;
         for line in input.lines().skip(2) {
             if line.contains(':') {
-                mapped = false; 
+                mapped = false;
                 continue;
             }
             if line.len() == 0 {
                 continue;
             }
-            let [dst_range_start, src_range_start, range_len] = split_exact::<3>(line.trim(), ' ').unwrap();
+            let [dst_range_start, src_range_start, range_len] =
+                split_exact::<3>(line.trim(), ' ').unwrap();
             let (dst_range_start, src_range_start, range_len) = (
-                dst_range_start.parse::<i64>().unwrap(), 
-                src_range_start.parse::<i64>().unwrap(), 
-                range_len.parse::<i64>().unwrap()
+                dst_range_start.parse::<i64>().unwrap(),
+                src_range_start.parse::<i64>().unwrap(),
+                range_len.parse::<i64>().unwrap(),
             );
             if !mapped && src_range_start <= seed && seed < src_range_start + range_len {
                 seed = dst_range_start + (seed - src_range_start);
@@ -395,22 +485,34 @@ fn day6(input: &str) {
 }
 
 #[derive(PartialEq, PartialOrd, Debug)]
-enum CombinationType { Five, Four, FullHouse, Three, TwoPair, OnePair, High }
+enum CombinationType {
+    Five,
+    Four,
+    FullHouse,
+    Three,
+    TwoPair,
+    OnePair,
+    High,
+}
 struct Hand {
     combination: CombinationType,
-    cards: [u8; 5]
+    cards: [u8; 5],
 }
 
-const SIMPLE_CARDS: &[u8] = &[b'A', b'K', b'Q', b'J', b'T', b'9', b'8', b'7', b'6', b'5', b'4', b'3', b'2'];
-const JOKER_CARDS: &[u8] = &[b'A', b'K', b'Q', b'T', b'9', b'8', b'7', b'6', b'5', b'4', b'3', b'2', b'J'];
-trait GameRules { 
-    fn card_order(card: u8) -> usize; 
+const SIMPLE_CARDS: &[u8] = &[
+    b'A', b'K', b'Q', b'J', b'T', b'9', b'8', b'7', b'6', b'5', b'4', b'3', b'2',
+];
+const JOKER_CARDS: &[u8] = &[
+    b'A', b'K', b'Q', b'T', b'9', b'8', b'7', b'6', b'5', b'4', b'3', b'2', b'J',
+];
+trait GameRules {
+    fn card_order(card: u8) -> usize;
     fn parse_hand(hand: &[u8]) -> Hand;
 }
 
 struct SimpleGame;
 impl GameRules for SimpleGame {
-    fn card_order(card: u8) -> usize { 
+    fn card_order(card: u8) -> usize {
         for i in 0..SIMPLE_CARDS.len() {
             if SIMPLE_CARDS[i] == card {
                 return i;
@@ -427,32 +529,64 @@ impl GameRules for SimpleGame {
         let mut runs = 0;
         let mut lone_cards = 0;
         for i in 0..sorted_cards.len() {
-            runs += if i == 0 || sorted_cards[i - 1] != sorted_cards[i] { 1 } else { 0 };
-            lone_cards += if i != 0 && sorted_cards[i - 1] == sorted_cards[i] || i + 1 < sorted_cards.len() && sorted_cards[i + 1] == sorted_cards[i] { 0 } else { 1 };
+            runs += if i == 0 || sorted_cards[i - 1] != sorted_cards[i] {
+                1
+            } else {
+                0
+            };
+            lone_cards += if i != 0 && sorted_cards[i - 1] == sorted_cards[i]
+                || i + 1 < sorted_cards.len() && sorted_cards[i + 1] == sorted_cards[i]
+            {
+                0
+            } else {
+                1
+            };
         }
 
         return if sorted_cards[0] == sorted_cards[4] {
-            Hand { combination: CombinationType::Five, cards: original_cards }
+            Hand {
+                combination: CombinationType::Five,
+                cards: original_cards,
+            }
         } else if sorted_cards[0] == sorted_cards[3] || sorted_cards[1] == sorted_cards[4] {
-            Hand { combination: CombinationType::Four, cards: original_cards }
-        } else if sorted_cards[0] == sorted_cards[2] && sorted_cards[3] == sorted_cards[4] || 
-                  sorted_cards[0] == sorted_cards[1] && sorted_cards[2] == sorted_cards[4] {
-            Hand { combination: CombinationType::FullHouse, cards: original_cards }
+            Hand {
+                combination: CombinationType::Four,
+                cards: original_cards,
+            }
+        } else if sorted_cards[0] == sorted_cards[2] && sorted_cards[3] == sorted_cards[4]
+            || sorted_cards[0] == sorted_cards[1] && sorted_cards[2] == sorted_cards[4]
+        {
+            Hand {
+                combination: CombinationType::FullHouse,
+                cards: original_cards,
+            }
         } else if runs == 3 && lone_cards == 2 {
-            Hand { combination: CombinationType::Three, cards: original_cards }
+            Hand {
+                combination: CombinationType::Three,
+                cards: original_cards,
+            }
         } else if runs == 3 {
-            Hand { combination: CombinationType::TwoPair, cards: original_cards }
+            Hand {
+                combination: CombinationType::TwoPair,
+                cards: original_cards,
+            }
         } else if runs == 4 {
-            Hand { combination: CombinationType::OnePair, cards: original_cards }
+            Hand {
+                combination: CombinationType::OnePair,
+                cards: original_cards,
+            }
         } else {
-            Hand { combination: CombinationType::High, cards: original_cards }
-        }
+            Hand {
+                combination: CombinationType::High,
+                cards: original_cards,
+            }
+        };
     }
 }
 
 struct JokerGame;
 impl GameRules for JokerGame {
-    fn card_order(card: u8) -> usize { 
+    fn card_order(card: u8) -> usize {
         for i in 0..JOKER_CARDS.len() {
             if JOKER_CARDS[i] == card {
                 return i;
@@ -462,7 +596,7 @@ impl GameRules for JokerGame {
     }
     fn parse_hand(hand: &[u8]) -> Hand {
         if !hand.contains(&b'J') {
-            return SimpleGame::parse_hand(hand)
+            return SimpleGame::parse_hand(hand);
         }
 
         let mut original_cards = [0 as u8; 5];
@@ -475,22 +609,47 @@ impl GameRules for JokerGame {
         let mut lone_cards = 0;
         for i in 0..sorted_cards.len() {
             jokers_count += if sorted_cards[i] == b'J' { 1 } else { 0 };
-            runs += if i == 0 || sorted_cards[i - 1] != sorted_cards[i] { 1 } else { 0 };
-            lone_cards += if i != 0 && sorted_cards[i - 1] == sorted_cards[i] || i + 1 < sorted_cards.len() && sorted_cards[i + 1] == sorted_cards[i] { 0 } else { 1 };
+            runs += if i == 0 || sorted_cards[i - 1] != sorted_cards[i] {
+                1
+            } else {
+                0
+            };
+            lone_cards += if i != 0 && sorted_cards[i - 1] == sorted_cards[i]
+                || i + 1 < sorted_cards.len() && sorted_cards[i + 1] == sorted_cards[i]
+            {
+                0
+            } else {
+                1
+            };
         }
         assert!(jokers_count > 0);
 
         return if runs <= 2 {
-            Hand { combination: CombinationType::Five, cards: original_cards }
+            Hand {
+                combination: CombinationType::Five,
+                cards: original_cards,
+            }
         } else if runs == 3 && !(jokers_count == 1 && lone_cards == 1) {
-            Hand { combination: CombinationType::Four, cards: original_cards }
+            Hand {
+                combination: CombinationType::Four,
+                cards: original_cards,
+            }
         } else if runs == 3 && jokers_count == 1 && lone_cards == 1 {
-            Hand { combination: CombinationType::FullHouse, cards: original_cards }
+            Hand {
+                combination: CombinationType::FullHouse,
+                cards: original_cards,
+            }
         } else if runs == 4 {
-            Hand { combination: CombinationType::Three, cards: original_cards }
+            Hand {
+                combination: CombinationType::Three,
+                cards: original_cards,
+            }
         } else {
-            Hand { combination: CombinationType::OnePair, cards: original_cards }
-        }
+            Hand {
+                combination: CombinationType::OnePair,
+                cards: original_cards,
+            }
+        };
     }
 }
 
@@ -500,12 +659,11 @@ fn beats<T: GameRules>(left: &Hand, right: &Hand) -> bool {
     }
     for i in 0..5 {
         if left.cards[i] != right.cards[i] {
-            return T::card_order(left.cards[i]) < T::card_order(right.cards[i])
+            return T::card_order(left.cards[i]) < T::card_order(right.cards[i]);
         }
     }
     return false;
 }
-
 
 fn parse_bid<T: GameRules>(line: &[u8]) -> (Hand, i32, &[u8]) {
     let mut bid = 0;
@@ -516,7 +674,7 @@ fn parse_bid<T: GameRules>(line: &[u8]) -> (Hand, i32, &[u8]) {
         bid = 10 * bid + (line[i] - b'0') as i32;
         i += 1;
     }
-    return (hand, bid, &line[(i+1).min(line.len())..]);
+    return (hand, bid, &line[(i + 1).min(line.len())..]);
 }
 
 fn parse_bid_str<T: GameRules>(line: &str) -> (Hand, i32) {
@@ -525,7 +683,6 @@ fn parse_bid_str<T: GameRules>(line: &str) -> (Hand, i32) {
 
     return (hand, bid.parse::<i32>().unwrap());
 }
-
 
 // intentionally quadratic because I'm still afraid of allocations, sorry
 fn day7<T: GameRules>(input: &[u8]) {
@@ -574,9 +731,9 @@ trait NodeExtensions {
 impl NodeExtensions for &str {
     fn code(&self) -> usize {
         let bytes = self.as_bytes();
-        return ((bytes[0] - b'A') as usize) * 26 * 26 + 
-               ((bytes[1] - b'A') as usize) * 26 + 
-               ((bytes[2] - b'A') as usize);
+        return ((bytes[0] - b'A') as usize) * 26 * 26
+            + ((bytes[1] - b'A') as usize) * 26
+            + ((bytes[2] - b'A') as usize);
     }
 }
 
@@ -615,7 +772,11 @@ fn day8(input: &str) {
         for node in [source, left, right] {
             let mut current = node;
             for command in commands {
-                current = if *command == b'L' { transitions[current].0 } else { transitions[current].1 }; 
+                current = if *command == b'L' {
+                    transitions[current].0
+                } else {
+                    transitions[current].1
+                };
             }
             jumps[node] = current;
         }
@@ -626,7 +787,11 @@ fn day8(input: &str) {
         let mut node = 0;
         while node != 26 * 26 * 26 - 1 {
             let command = commands[steps % commands.len()];
-            node = if command == b'L' { transitions[node].0 } else { transitions[node].1 };
+            node = if command == b'L' {
+                transitions[node].0
+            } else {
+                transitions[node].1
+            };
             steps += 1;
         }
         eprintln!("day08: {steps}");
@@ -684,7 +849,7 @@ fn day8_hard_brute_force(input: &str) {
     let ghosts = &mut ghosts[..ghost_id];
 
     let mut jumps = [0; 26 * 26 * 26];
-    let mut masks = [[0 as u64; MASK_SIZE]; 26 * 26 * 26]; 
+    let mut masks = [[0 as u64; MASK_SIZE]; 26 * 26 * 26];
     for line in lines.clone() {
         let (source, targets) = line.split_once('=').unwrap();
         let (source, targets) = (source.trim().code(), targets.trim_matches(TRIM_CHARS));
@@ -696,7 +861,11 @@ fn day8_hard_brute_force(input: &str) {
                 if current % 26 == 25 {
                     masks[node][i / 64] |= 1 << (i % 64);
                 }
-                current = if *command == b'L' { transitions[current].0 } else { transitions[current].1 }; 
+                current = if *command == b'L' {
+                    transitions[current].0
+                } else {
+                    transitions[current].1
+                };
             }
             jumps[node] = current;
         }
@@ -736,7 +905,11 @@ fn day8_hard_brute_force(input: &str) {
             let command = commands[steps % commands.len()];
             steps += 1;
             for i in 0..ghosts.len() {
-                ghosts[i] = if command == b'L' { transitions[ghosts[i]].0 } else { transitions[ghosts[i]].1 };
+                ghosts[i] = if command == b'L' {
+                    transitions[ghosts[i]].0
+                } else {
+                    transitions[ghosts[i]].1
+                };
             }
         }
         eprintln!("day8 (bruteforce): {steps}");
@@ -745,10 +918,10 @@ fn day8_hard_brute_force(input: &str) {
 
 fn get_c(n: usize, k: usize) -> i128 {
     let mut result: i128 = 1;
-    for i in n-k+1..n+1 {
+    for i in n - k + 1..n + 1 {
         result *= i as i128;
     }
-    for i in 1..k+1 {
+    for i in 1..k + 1 {
         result /= i as i128;
     }
     return result;
@@ -761,11 +934,11 @@ fn day9(input: &str) {
         let count = line.split(' ').count();
         for (i, number) in line.split(' ').rev().enumerate() {
             let number = number.parse::<i128>().unwrap();
-            forward_prediction += get_c(count, i + 1) * number * (if i % 2 == 0 { 1 } else { -1 }); 
+            forward_prediction += get_c(count, i + 1) * number * (if i % 2 == 0 { 1 } else { -1 });
         }
         for (i, number) in line.split(' ').enumerate() {
             let number = number.parse::<i128>().unwrap();
-            backward_prediction += get_c(count, i + 1) * number * (if i % 2 == 0 { 1 } else { -1 }); 
+            backward_prediction += get_c(count, i + 1) * number * (if i % 2 == 0 { 1 } else { -1 });
         }
     }
     eprintln!("day09: {forward_prediction}");
@@ -790,7 +963,6 @@ const LB: Pipe = 0b1001;
 const RT: Pipe = 0b0110;
 const RB: Pipe = 0b1100;
 
-
 fn pipe_from(symbol: u8) -> Pipe {
     return match symbol {
         b'S' => ALL,
@@ -801,12 +973,15 @@ fn pipe_from(symbol: u8) -> Pipe {
         b'J' => LT,
         b'7' => LB,
         _ => NONE,
-    }
+    };
 }
 
 impl<'a> GridPipes for Grid<'a> {
     fn can_go(&self, position: Point, direction: Point) -> bool {
-        let (from, to) = (pipe_from(self.at(position)), pipe_from(self.at(position.add(direction))));
+        let (from, to) = (
+            pipe_from(self.at(position)),
+            pipe_from(self.at(position.add(direction))),
+        );
         return match direction {
             Point { x: -1, y: 0 } => from & T > 0 && to & B > 0,
             Point { x: 1, y: 0 } => from & B > 0 && to & T > 0,
@@ -830,8 +1005,13 @@ trait GridWalk {
 impl<'a> GridWalk for Grid<'a> {
     fn walk(&self, cursor: GridCursor) -> Option<GridCursor> {
         for &direction in DIRECTIONS_4 {
-            if self.can_go(cursor.current, direction) && cursor.current.add(direction) != cursor.previous {
-                return Some(GridCursor { current: cursor.current.add(direction), previous: cursor.current });
+            if self.can_go(cursor.current, direction)
+                && cursor.current.add(direction) != cursor.previous
+            {
+                return Some(GridCursor {
+                    current: cursor.current.add(direction),
+                    previous: cursor.current,
+                });
             }
         }
         return None;
@@ -840,11 +1020,16 @@ impl<'a> GridWalk for Grid<'a> {
 
 fn day10(input: &[u8]) {
     let grid = Grid::new(input);
-    let mut start = grid.index(input.iter().position(|&x| x == b'S').unwrap() as i32).unwrap();
-    let mut cursor = GridCursor { current: start, previous: start };
+    let mut start = grid
+        .index(input.iter().position(|&x| x == b'S').unwrap() as i32)
+        .unwrap();
+    let mut cursor = GridCursor {
+        current: start,
+        previous: start,
+    };
     let mut step = 0;
     let mut corner = cursor;
-    loop { 
+    loop {
         cursor = grid.walk(cursor).unwrap();
         if cursor.current < corner.current {
             corner = cursor;
@@ -867,9 +1052,11 @@ fn day10(input: &[u8]) {
         if cursor.current.sub(cursor.previous) == next.current.sub(next.previous) {
             delta += 2;
         } else {
-            if cursor.current != corner.current && next.current.sub(next.previous) == corner.current.sub(corner.previous) {
+            if cursor.current != corner.current
+                && next.current.sub(next.previous) == corner.current.sub(corner.previous)
+            {
                 corner_type = 4 - corner_type;
-            } 
+            }
             delta += corner_type;
             corner = cursor;
         }
@@ -928,13 +1115,18 @@ struct RIter {
 
 impl RIter {
     fn new(sum: i32, count: i32) -> RIter {
-        RIter { sum, count, previous_index: 0, current_index: 1, current_count: 0 }
+        RIter {
+            sum,
+            count,
+            previous_index: 0,
+            current_index: 1,
+            current_count: 0,
+        }
     }
-    fn valid(&mut self) -> bool {
-        return self.current_count == self.count && self.next().is_none();
+    fn valid(&mut self, rng: &mut SmallRng) -> bool {
+        return self.current_count == self.count && self.next(rng).is_none();
     }
-    fn next(&mut self) -> Option<i32> {
-        let mut rng = rand::thread_rng();
+    fn next(&mut self, rng: &mut SmallRng) -> Option<i32> {
         while self.current_index <= self.sum + self.count {
             let chance = rng.gen_range(0..self.sum + self.count);
             if chance >= self.count {
@@ -951,25 +1143,34 @@ impl RIter {
     }
 }
 
-fn validate_blocks(records: &[u8], blocks: &str, distances: &mut RIter) -> bool {
-    let mut ds: Vec<usize> = Vec::new();
-
+fn validate_blocks(
+    rng: &mut rand::rngs::SmallRng,
+    records: &[u8],
+    blocks: &str,
+    distances: &mut RIter,
+) -> bool {
     let mut valid = true;
     let mut current = 0;
     let mut lengths_iter = blocks.split(',').map(|x| x.parse::<i32>().unwrap());
     for i in 0..distances.count {
-        let distance = distances.next();
+        let distance = distances.next(rng);
         if distance.is_none() {
             return false;
         }
-        let distance = distance.unwrap() as usize;
-        ds.push(distance);
+        if !valid {
+            continue;
+        }
 
-        valid &= !records[current..current+distance].iter().any(|&x| x == b'#');
+        let distance = distance.unwrap() as usize;
+        valid &= !records[current..current + distance]
+            .iter()
+            .any(|&x| x == b'#');
         current += distance;
 
         let length = lengths_iter.next().unwrap() as usize;
-        valid &= !records[current..current + length as usize].iter().any(|&x| x == b'.');
+        valid &= !records[current..current + length]
+            .iter()
+            .any(|&x| x == b'.');
         current += length;
 
         if i < distances.count - 1 {
@@ -984,18 +1185,19 @@ fn validate_blocks(records: &[u8], blocks: &str, distances: &mut RIter) -> bool 
 }
 
 fn day12(input: &str, precision: f64) {
+    let mut rng = rand::rngs::SmallRng::from_entropy();
     let mut sum = 0;
     for line in input.lines() {
         let (records, blocks) = line.split_once(' ').unwrap();
         let blocks_count = blocks.split(',').count() as i32;
         let blocks_sum: i32 = blocks.split(',').map(|x| x.parse::<i32>().unwrap()).sum();
-        let distances = records.len() as i32 - (blocks_count - 1) - blocks_sum; 
+        let distances = records.len() as i32 - (blocks_count - 1) - blocks_sum;
         let (mut valid_samples, mut total_samples) = (0, 0);
         let total_count = get_c((distances + blocks_count) as usize, blocks_count as usize);
         loop {
-            let mut riter = RIter::new(distances, blocks_count); 
-            let valid = validate_blocks(records.as_bytes(), blocks, &mut riter);
-            if !riter.valid() {
+            let mut riter = RIter::new(distances, blocks_count);
+            let valid = validate_blocks(&mut rng, records.as_bytes(), blocks, &mut riter);
+            if !riter.valid(&mut rng) {
                 continue;
             }
             total_samples += 1;
@@ -1016,11 +1218,118 @@ fn day12(input: &str, precision: f64) {
     eprintln!("day12: ~{sum}");
 }
 
+// finally, we are starting alloc era!
+
+fn day17_easy(input: &[u8]) {
+    let grid = Grid::new(input);
+    let mut visited = HashMap::new();
+    let mut positions = BTreeSet::new();
+    let mut distances = HashMap::new();
+    let mut parents = HashMap::new();
+    let (left_top, right_bottom) = (Point{ x: 0, y: 0 }, Point { x: grid.height - 1, y: grid.width - 2 });
+    for &direction in DIRECTIONS_4 {
+        positions.insert((0, left_top, direction));
+    }
+    while positions.len() > 0 {
+        let (mut distance, point, direction) = positions.pop_first().unwrap();
+        if visited.contains_key(&(point, direction)) {
+            continue;
+        }
+        visited.insert((point, direction), ());
+        let mut next_point = point;
+        for _ in 0..3 {
+            next_point = next_point.add(direction);
+            if let Some(cost) = grid.at(next_point).digit() { distance += cost; } else { break };
+            for &turn in DIRECTIONS_4.iter().filter(|&&x| x != direction && x.add(direction) != Point{x: 0, y: 0}) {
+                let next = distances.get(&(next_point, turn));
+                if next.is_none() || distance < *next.unwrap() {
+                    distances.insert((next_point, turn), distance);
+                    positions.insert((distance, next_point, turn));
+                    parents.insert((next_point, turn), (point, direction));
+                }
+            }
+        }
+    }
+//    let mut visual = Vec::new();
+//    for _ in 0..right_bottom.y+1 {
+//        let mut row = Vec::new();
+//        for _ in 0..right_bottom.x+1 {
+//            row.push(b'.');
+//        }
+//        visual.push(row);
+//    }
+//    let (mut current, mut d) = (right_bottom, DIRECTIONS_4[1]);
+//    let mut i = 0;
+//    let mut kek = 0;
+//    while current != left_top {
+//        dbg!(current);
+//        let previous;
+//        (previous, d) = *parents.get(&(current, d)).unwrap();
+//        while previous != current {
+//            let cell = &mut visual[current.x as usize][current.y as usize];
+//            kek += grid.at(current).digit().unwrap();
+//            if *cell == b'.' {
+//                *cell = b'0' + (i % 10);
+//            }
+//            current = current.sub(d);
+//            i += 1;
+//        }
+//    }
+//    dbg!(kek);
+//    for row in visual {
+//        eprintln!("{}", String::from_utf8(row).unwrap());
+//    }
+    let best_distance = DIRECTIONS_4.iter().map(|&x| *distances.get(&(right_bottom, x)).unwrap()).min().unwrap();
+    eprintln!("day17: {best_distance}");
+}
+
+fn day17_hard(input: &[u8]) {
+    let grid = Grid::new(input);
+    let mut visited = HashMap::new();
+    let mut positions = BTreeSet::new();
+    let mut distances = HashMap::new();
+    let mut parents = HashMap::new();
+    let (left_top, right_bottom) = (Point{ x: 0, y: 0 }, Point { x: grid.height - 1, y: grid.width - 2 });
+    for &direction in DIRECTIONS_4 {
+        positions.insert((0, left_top, direction));
+    }
+    while positions.len() > 0 {
+        let (mut distance, point, direction) = positions.pop_first().unwrap();
+        if visited.contains_key(&(point, direction)) {
+            continue;
+        }
+        visited.insert((point, direction), ());
+        let mut next_point = point;
+        for i in 0..10 {
+            next_point = next_point.add(direction);
+            if let Some(cost) = grid.at(next_point).digit() { distance += cost; } else { break };
+            if i < 3 { continue; }
+            for &turn in DIRECTIONS_4.iter().filter(|&&x| x != direction && x.add(direction) != Point{x: 0, y: 0}) {
+                let next = distances.get(&(next_point, turn));
+                if next.is_none() || distance < *next.unwrap() {
+                    distances.insert((next_point, turn), distance);
+                    positions.insert((distance, next_point, turn));
+                    parents.insert((next_point, turn), (point, direction));
+                }
+            }
+        }
+    }
+    let best_distance = DIRECTIONS_4.iter().map(|&x| *distances.get(&(right_bottom, x)).unwrap()).min().unwrap();
+    eprintln!("day17: {best_distance}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
-    day1(include_str!("inputs/input01.txt").trim(), DAY1_HARD_PATTERN); 
-    day2(include_str!("inputs/input02.txt").trim(), Bag{ red: 12, green: 13, blue: 14 });
+    day1(include_str!("inputs/input01.txt").trim(), DAY1_HARD_PATTERN);
+    day2(
+        include_str!("inputs/input02.txt").trim(),
+        Bag {
+            red: 12,
+            green: 13,
+            blue: 14,
+        },
+    );
     day3_easy(include_bytes!("inputs/input03.txt"));
     day3_hard(include_bytes!("inputs/input03.txt"));
     day4(include_str!("inputs/input04.txt").trim());
@@ -1033,6 +1342,8 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day9(include_str!("inputs/input09.txt").trim());
     day10(include_bytes!("inputs/input10.txt"));
     day11(include_bytes!("inputs/input11.txt"));
-    day12(include_str!("inputs/input12.txt").trim(), 0.5);
+    // day12(include_str!("inputs/input12.txt").trim(), 0.5);
+    day17_easy(include_bytes!("inputs/input17.txt"));
+    day17_hard(include_bytes!("inputs/input17.txt"));
     0
 }
