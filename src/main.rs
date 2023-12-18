@@ -1,9 +1,10 @@
 #![feature(start)]
 
 use std::collections::{BTreeSet, HashMap};
+use std::i64;
 
 use rand::{
-    rngs::{SmallRng, ThreadRng},
+    rngs::SmallRng,
     Rng, SeedableRng,
 };
 
@@ -1318,6 +1319,122 @@ fn day17_hard(input: &[u8]) {
     eprintln!("day17: {best_distance}");
 }
 
+#[derive(Debug)]
+struct Trench {
+    direction: Point,
+    distance: i32,
+}
+
+fn paint(x: i32, y: i32, grid: &mut Vec<Vec<i32>>) {
+    if x < 0 || y < 0 || x as usize >= grid.len() || y as usize>= grid[0].len() || grid[x as usize][y as usize] != 0 {
+        return;
+    }
+    grid[x as usize][y as usize] = 2;
+    for d in DIRECTIONS_4 {
+        paint(x + d.x, y + d.y, grid);
+    }
+}
+
+fn day18_easy(input: &'static str) {
+    let mut trenches = Vec::new();
+    for line in input.lines() {
+        let mut tokens_iter = line.split(' ');
+        let direction_char = tokens_iter.next().unwrap();
+        let distance = tokens_iter.next().unwrap().parse::<i32>().unwrap();
+        let direction = match direction_char {
+            "U" => DIRECTIONS_4[0],
+            "R" => DIRECTIONS_4[1],
+            "D" => DIRECTIONS_4[2],
+            "L" => DIRECTIONS_4[3],
+            _ => unreachable!("invalid direction"),
+        };
+        trenches.push(Trench{ direction, distance });
+    }
+    let mut current_p = Point { x: 0, y: 0 };
+    let (mut min_p, mut max_p) = (current_p, current_p);
+    for trench in &trenches {
+        current_p = current_p.add(trench.direction.mult(trench.distance)); 
+        min_p.x = min_p.x.min(current_p.x);
+        min_p.y = min_p.y.min(current_p.y);
+        max_p.x = max_p.x.max(current_p.x);
+        max_p.y = max_p.y.max(current_p.y);
+    }
+    let mut grid = Vec::new();
+    for _ in min_p.x-1..=max_p.x+1 {
+        grid.push(vec![0; (max_p.y - min_p.y + 3) as usize]);
+    }
+    let (min_x, min_y) = (min_p.x - 1, min_p.y - 1);
+
+    current_p = Point { x: 0, y: 0 };
+    for trench in &trenches {
+        grid[(current_p.x - min_x) as usize][(current_p.y - min_y) as usize] = 1;
+        for _ in 0..trench.distance {
+            current_p = current_p.add(trench.direction);
+            grid[(current_p.x - min_x) as usize][(current_p.y - min_y) as usize] = 1; 
+        }
+    }
+    paint(0, 0, &mut grid);
+    let mut area = 0;
+    for row in grid {
+        area += row.iter().filter(|&&x| x != 2).count();
+    }
+    eprintln!("day18: {area}");
+}
+
+fn day18_hard(input: &'static str) {
+    let mut trenches = Vec::new();
+    for line in input.lines() {
+        let mut tokens_iter = line.split(' ');
+        _ = tokens_iter.next().unwrap();
+        _ = tokens_iter.next().unwrap().parse::<i32>().unwrap();
+        let color = tokens_iter.next().unwrap();
+        let color = &color[2..color.len() - 1];
+        let distance = i32::from_str_radix(&color[..5], 16).unwrap();
+        let direction = DIRECTIONS_4[((i64::from_str_radix(&color[5..], 16).unwrap() + 1) % 4) as usize];
+        trenches.push(Trench{ direction, distance });
+    }
+     let mut current_p = Point { x: 0, y: 0 };
+     let (mut xs, mut ys) = (vec![-1, 0, 1], vec![-1, 0, 1]);
+     for trench in &trenches {
+         current_p = current_p.add(trench.direction.mult(trench.distance)); 
+         for d in -1..=1 {
+             xs.push(current_p.x + d);
+             ys.push(current_p.y + d);
+         }
+     }
+     xs.sort(); xs.dedup();
+     ys.sort(); ys.dedup();
+
+     let mut grid = Vec::new();
+     for _ in 0..xs.len() {
+         grid.push(vec![0; ys.len()]);
+     }
+     current_p = Point { x: 0, y: 0 };
+     for trench in &trenches {
+         let mut start_x = xs.binary_search(&current_p.x).unwrap() as i32;
+         let mut start_y = ys.binary_search(&current_p.y).unwrap() as i32;
+         current_p = current_p.add(trench.direction.mult(trench.distance));
+         let end_x = xs.binary_search(&current_p.x).unwrap() as i32;
+         let end_y = ys.binary_search(&current_p.y).unwrap() as i32;
+         while start_x != end_x || start_y != end_y {
+             grid[start_x as usize][start_y as usize] = 1;
+             start_x += (end_x - start_x).signum();
+             start_y += (end_y - start_y).signum();
+         }
+     }
+     paint(0, 0, &mut grid);
+     let mut area = 0;
+     for (x, row) in grid.iter().enumerate() {
+         for (y, &cell) in row.iter().enumerate() {
+             if cell == 2 {
+                 continue;
+             }
+             area += (xs[x + 1] - xs[x]) as i64 * (ys[y + 1] - ys[y]) as i64;
+         }
+     }
+     eprintln!("day18: {area}");
+}
+
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day1(include_str!("inputs/input01.txt").trim(), DAY1_EASY_PATTERN);
@@ -1342,8 +1459,10 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
     day9(include_str!("inputs/input09.txt").trim());
     day10(include_bytes!("inputs/input10.txt"));
     day11(include_bytes!("inputs/input11.txt"));
-    // day12(include_str!("inputs/input12.txt").trim(), 0.5);
+    day12(include_str!("inputs/input12.txt").trim(), 0.5);
     day17_easy(include_bytes!("inputs/input17.txt"));
     day17_hard(include_bytes!("inputs/input17.txt"));
+    day18_easy(include_str!("inputs/input18.txt").trim());
+    day18_hard(include_str!("inputs/example18.txt").trim());
     0
 }
